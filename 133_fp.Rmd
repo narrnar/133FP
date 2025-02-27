@@ -7,8 +7,19 @@ output: pdf_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+
+# --- Client ID --- #
+# naXHkMhBTywrOh0ova7Pmh_7tTOcFJ1EpQfKTNvZlyM4wsRPZL7m_--NCwt6an32
+
+# --- Client Secret --- #
+# c_1ut-Bgqy7agNISeCTTET6A68C5hxiFiBqB7UFGXQDE4pgmcDewv4pUHIn3cbVWWMHua3lKrh2YLJRtNmxu7Q
+
+# --- Client Access Token --- #
+# kZ48sYRz8TEkQpsfhNT-DYQUcZ5eX49m8uukKgCnPFk_WFAGo5HJ0JvEEr-Jnx05
 ```
 
+
+# Album to txt
 ```{r}
 library(rvest)
 library(stringr)
@@ -23,33 +34,195 @@ album_url <- "https://genius.com/albums/Kanye-west/Late-registration"
 
 # Scrape song URLs from album page
 album_page <- read_html(album_url)
-song_urls <- album_page %>%
-  html_nodes("a[href*='/Kanye-west-']") %>%
-  html_attr("href") %>%
-  unique()  # Remove duplicates
+ong_urls <- album_page %>%
+  html_nodes("a[href*='/Kanye-west-']") %>%
+  html_attr("href") %>%
+  unique()# Remove duplicates
 
 # Loop through each song and save lyrics
 for (url in song_urls) {
-  song_name <- str_extract(url, "Kanye-west-[^/]+") %>%
-    str_replace("Kanye-west-", "") %>%
-    paste0(".txt")
-  
-  # Read the HTML page
-  page <- read_html(url)
-  
-  # Extract lyrics
-  lyrics <- page %>%
-    html_nodes("div[data-lyrics-container='true']") %>%
-    html_text() %>%
-    str_squish()
-  
-  # Define file path
-  file_path <- file.path(album_name, song_name)
-  
-  # Write lyrics to file
-  writeLines(lyrics, file_path)
-  
-  print(paste("Saved:", file_path))
+  song_name <- str_extract(url, "Kanye-west-[^/]+") %>%
+    str_replace("Kanye-west-", "") %>%
+    paste0(".txt")
+
+  # Read the HTML page
+  page <- read_html(url)
+  
+  # Extract lyrics
+  lyrics <- page %>%
+    html_nodes("div[data-lyrics-container='true']") %>%
+    html_text() %>%
+    str_squish()
+
+  # Define file path
+  file_path <- file.path(album_name, song_name)
+
+  # Write lyrics to file
+  writeLines(lyrics, file_path)
+  
+  print(paste("Saved:", file_path))
 }
+```
+
+
+
+# Artist to txt
+
+```{r}
+library(rvest)
+library(stringr)
+library(httr)
+library(purrr)
+library(dplyr)
+
+# MAIN FUNCTION -----------------------------------------------------------
+scrape_artist_discography <- function(artist_slug, artist_num) {
+  # Configuration -- stackexhange
+  user_agent <- "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36"
+  base_dir <- "/Users/darensivam/Desktop/UCLA/Year 4/Winter/133/Final Project/lyrics/"
+  output_dir <- file.path(base_dir, paste0("artist", artist_num))
+  
+  # Setup directories and logging
+  dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
+  log_file <- file.path(output_dir, "scrape_errors.log")
+  write(paste("Scraping started for", artist_slug, "at", Sys.time()), log_file)
+  
+  # Create a simple metadata file
+  writeLines(
+    c(paste("Artist:", str_replace_all(artist_slug, "-", " ")),
+      paste("Scraped:", Sys.time()),
+      paste("Source:", "Genius.com")),
+    file.path(output_dir, "_metadata.txt")
+  )  # <-- Important: closing parenthesis for writeLines()
+  
+  # Safe HTML reading with random delay (for courtesy)
+  safe_read <- safely(function(url) {
+    Sys.sleep(runif(1, 0.8, 2.2))  # Random delay between 0.8 and 2.2s
+    read_html(httr::GET(url, user_agent(user_agent)))
+  })
+  
+  # Get all album links ---------------------------------------------------
+  artist_albums_url <- paste0("https://genius.com/artists/", artist_slug, "/albums")
+  album_page_result <- safe_read(artist_albums_url)
+  
+  if (is.null(album_page_result$result)) {
+    write("Failed to access artist albums page", log_file, append = TRUE)
+    return(invisible())
+  }
+  
+  # Extract album URLs
+  album_urls <- album_page_result$result %>%
+    html_nodes(xpath = paste0("//a[contains(@href, '/albums/", artist_slug, "')]")) %>%
+    html_attr("href") %>%
+    discard(~ str_detect(.x, "photos|videos|trivia|about")) %>%
+    paste0("https://genius.com", .) %>%
+    unique()
+  
+  # Helper function to process each album
+  process_album <- function(album_url) {
+    album_html_result <- safe_read(album_url)
+    if (is.null(album_html_result$result)) {
+      write(paste("Album failed:", album_url), log_file, append = TRUE)
+      return()
+    }
+    
+    # Extract album name
+    album_name <- album_html_result$result %>%
+      html_node("h1.header_with_cover_art-primary_info-title") %>%
+      html_text() %||%
+      # fallback if the above node is missing
+      str_extract(album_url, paste0("(?<=", artist_slug, "/).*$")) %>%
+      str_replace_all("-", " ") %>%
+      str_to_title()
+    
+    # Clean the album name for file system
+    clean_album_name <- album_name %>%
+      str_remove_all("[^[:alnum:] ]") %>%
+      str_squish()
+    
+    # Create album directory
+    album_dir <- file.path(output_dir, clean_album_name)
+    dir.create(album_dir, showWarnings = FALSE)
+    
+    # Extract all song URLs from the album page
+    # This XPath looks for links containing '-lyrics' but not 'annotated'
+    song_urls <- album_html_result$result %>%
+      html_nodes(xpath = "//a[contains(@href, '-lyrics') and not(contains(@href, 'annotated'))]") %>%
+      html_attr("href") %>%
+      unique()
+    
+    if (length(song_urls) == 0) return()
+    
+    # Progress bar for songs
+    pb <- txtProgressBar(min = 0, max = length(song_urls), style = 3)
+    message("\nProcessing album: ", album_name)
+    
+    walk2(song_urls, seq_along(song_urls), function(song_url, idx) {
+      tryCatch({
+        song_html_result <- safe_read(song_url)
+        if (is.null(song_html_result$result)) {
+          write(paste("Song failed:", song_url), log_file, append = TRUE)
+          return()
+        }
+        
+        # Extract/clean song title
+        song_title <- song_html_result$result %>%
+          html_node("h1[class*='SongHeader__Title']") %>%
+          html_text() %||%
+          str_extract(song_url, paste0("(?<=", artist_slug, "/).*(?=-lyrics)")) %>%
+          str_replace_all("-", " ") %>%
+          str_to_title()
+        
+        clean_song_title <- song_title %>%
+          str_remove_all("[^[:alnum:] ']+") %>%
+          str_squish() %>%
+          paste0(".txt")
+        
+        # Check if already exists
+        file_path <- file.path(album_dir, clean_song_title)
+        if (file.exists(file_path)) return()
+        
+        # Extract lyrics
+        lyrics <- song_html_result$result %>%
+          html_nodes("div[data-lyrics-container='true'], .Lyrics__Container") %>%
+          html_text() %>%
+          paste(collapse = "\n") %>%
+          str_remove_all("\\[[^\\]]*\\]") %>%
+          str_squish()
+        
+        # If we have non-empty lyrics, write them out
+        if (nzchar(lyrics)) {
+          writeLines(lyrics, file_path)
+        }
+        
+      }, error = function(e) {
+        write(paste("Error processing", song_url, ":", e$message), log_file, append = TRUE)
+      })
+      
+      # Update progress
+      setTxtProgressBar(pb, idx)
+    })
+    
+    close(pb)
+  }
+  
+  # Iterate over all albums
+  walk(album_urls, process_album)
+  
+  # Wrap up
+  write(paste("Scraping completed for", artist_slug, "at", Sys.time()), log_file, append = TRUE)
+}
+
+# USAGE -------------------------------------------------------------------
+# Scrape Doom
+scrape_artist_discography("Mf-doom", 1)
+
+# Scrape Tyler
+# scrape_artist_discography("Tyler-the-creator", 2)
+```
+# Extract txt from discography
+
+```{r}
+
 ```
 
