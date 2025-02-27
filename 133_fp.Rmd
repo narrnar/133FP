@@ -7,6 +7,9 @@ output: pdf_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+library(geniusr)
+
+Sys.setenv(GENIUS_API_TOKEN = "yxwe42jdT0MvORWPgZ4HdKyNx9axVEQWPCvjkSQ0zjGNUYZ2mGIqBrAuW9CpUAWG")
 
 # --- Client ID --- #
 # naXHkMhBTywrOh0ova7Pmh_7tTOcFJ1EpQfKTNvZlyM4wsRPZL7m_--NCwt6an32
@@ -15,8 +18,12 @@ knitr::opts_chunk$set(echo = TRUE)
 # c_1ut-Bgqy7agNISeCTTET6A68C5hxiFiBqB7UFGXQDE4pgmcDewv4pUHIn3cbVWWMHua3lKrh2YLJRtNmxu7Q
 
 # --- Client Access Token --- #
-# KYUwTSuVC7t5neYusVkbmsA-VtPgEcPvBzy283ItD2sC4SzuTbWHcqM3g3-Vvbxk
-genius_token(KYUwTSuVC7t5neYusVkbmsA-VtPgEcPvBzy283ItD2sC4SzuTbWHcqM3g3-Vvbxk)
+# yxwe42jdT0MvORWPgZ4HdKyNx9axVEQWPCvjkSQ0zjGNUYZ2mGIqBrAuW9CpUAWG
+genius_token(yxwe42jdT0MvORWPgZ4HdKyNx9axVEQWPCvjkSQ0zjGNUYZ2mGIqBrAuW9CpUAWG)
+
+# Check if token is working:
+search_genius("MF DOOM")
+search_artist("MF DOOM")
 ```
 
 
