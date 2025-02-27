@@ -1,0 +1,55 @@
+---
+title: "STATS 133 Final Project"
+author: "Daren Sathasivam"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(rvest)
+library(stringr)
+library(httr)
+
+# Create album folder
+album_name <- "Late Registration"
+dir.create(album_name, showWarnings = FALSE)
+
+# Genius album page URL
+album_url <- "https://genius.com/albums/Kanye-west/Late-registration"
+
+# Scrape song URLs from album page
+album_page <- read_html(album_url)
+song_urls <- album_page %>%
+  html_nodes("a[href*='/Kanye-west-']") %>%
+  html_attr("href") %>%
+  unique()  # Remove duplicates
+
+# Loop through each song and save lyrics
+for (url in song_urls) {
+  song_name <- str_extract(url, "Kanye-west-[^/]+") %>%
+    str_replace("Kanye-west-", "") %>%
+    paste0(".txt")
+  
+  # Read the HTML page
+  page <- read_html(url)
+  
+  # Extract lyrics
+  lyrics <- page %>%
+    html_nodes("div[data-lyrics-container='true']") %>%
+    html_text() %>%
+    str_squish()
+  
+  # Define file path
+  file_path <- file.path(album_name, song_name)
+  
+  # Write lyrics to file
+  writeLines(lyrics, file_path)
+  
+  print(paste("Saved:", file_path))
+}
+```
+
