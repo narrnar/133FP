@@ -15,7 +15,8 @@ knitr::opts_chunk$set(echo = TRUE)
 # c_1ut-Bgqy7agNISeCTTET6A68C5hxiFiBqB7UFGXQDE4pgmcDewv4pUHIn3cbVWWMHua3lKrh2YLJRtNmxu7Q
 
 # --- Client Access Token --- #
-# kZ48sYRz8TEkQpsfhNT-DYQUcZ5eX49m8uukKgCnPFk_WFAGo5HJ0JvEEr-Jnx05
+# KYUwTSuVC7t5neYusVkbmsA-VtPgEcPvBzy283ItD2sC4SzuTbWHcqM3g3-Vvbxk
+genius_token(KYUwTSuVC7t5neYusVkbmsA-VtPgEcPvBzy283ItD2sC4SzuTbWHcqM3g3-Vvbxk)
 ```
 
 
@@ -66,7 +67,7 @@ for (url in song_urls) {
 
 
 
-# Artist to txt
+# Artist to txt w/o geniusr
 
 ```{r}
 library(rvest)
@@ -220,6 +221,95 @@ scrape_artist_discography("Mf-doom", 1)
 # Scrape Tyler
 # scrape_artist_discography("Tyler-the-creator", 2)
 ```
+
+
+
+
+
+# Extract artist to lyric txt w/ geniusr
+
+```{r}
+library(geniusr)
+library(dplyr)
+library(purrr)
+library(stringr)
+library(fs)
+
+scrape_artist_discography <- function(artist_name, artist_num) {
+  # Setup directories --- paste ur directory below
+  output_dir <- path(
+    "/Users/darensivam/Desktop/UCLA/Year 4/Winter/133/Final Project/lyrics", 
+    paste0("artist", artist_num)
+  )
+  dir_create(output_dir)
+  
+  # 1. Retrieve all possible matches for the given artist_name
+  artist_df <- search_artist(artist_name) %>%
+    slice(1)  # just take the top row
+  # --- Debug: If no match then artist not found --- #
+  if (nrow(artist_df) == 0) {
+    stop("Artist not found: ", artist_name)
+  }
+  
+  # 2. Get songs with the found artist ID
+  songs <- get_artist_songs_df(
+    artist_id = artist_df$artist_id,
+    include_features = FALSE
+  ) %>%
+    distinct(song_id, .keep_all = TRUE)
+
+  # --- Debug: If no songs found, you can handle it gracefully --- #
+  if (nrow(songs) == 0) {
+    message("No songs found for: ", artist_name)
+    return(invisible(NULL))
+  }
+  
+  # 3. Group songs by album
+  songs %>%
+    group_by(
+      album_id, 
+      album_name = coalesce(album_name, "Non-Album") # stackechange
+    ) %>%
+    arrange(track_number, .by_group = TRUE) %>%
+    group_walk(~ { # stackexhange help
+      safe_album_name <- .y$album_name %>%
+        str_remove_all("[^\\w ]") %>%
+        str_squish()
+      # Store album
+      album_dir <- path(output_dir, safe_album_name)
+      dir_create(album_dir)
+      
+      # 4. For each song, get lyrics and write to file
+      walk2(.x$song_id, seq_along(.x$song_id), ~ {
+        song_title <- .x$title %>%
+          str_remove_all("[^\\w ]") %>%
+          str_squish()
+        
+        song_file <- path(album_dir, sprintf("%02d_%s.txt", .y, song_title))
+        # --- Debug: if song file already exists --- #
+        if (!file_exists(song_file)) {
+          try({
+            lyrics <- get_lyrics_id(.x$song_id)$line %>%
+              paste(collapse = "\n") %>%
+              str_remove_all("\\[[^\\]]+\\]")  # optional bracket removal
+            writeLines(lyrics, song_file)
+            Sys.sleep(0.8)  # courtesy delay recommended in 102a by Prof Chen
+          }, silent = TRUE)
+        }
+      })
+    })
+}
+
+
+# --- USAGE --- #
+# 1) MF DOOM
+scrape_artist_discography("MF DOOM", 1)
+# 2) Tyler, The Creator
+scrape_artist_discography("Tyler, the Creator", 2)
+```
+
+
+
 # Extract txt from discography
 
 ```{r}
