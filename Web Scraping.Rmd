@@ -1,0 +1,192 @@
+---
+title: "Final Project"
+author: "Derek Diaz - 506233581"
+date: "2025-02-24"
+output: pdf_document
+---
+
+#Tyler, The Creator
+```{r}
+library(rvest)
+library(stringr)
+library(httr)
+library(dplyr)
+
+# Set artist name and Genius artist page URL
+artist_name <- "Tyler, The Creator"
+artist_url <- "https://genius.com/artists/Tyler-the-creator"
+
+# Create main artist folder
+dir.create(artist_name, showWarnings = FALSE)
+
+# Scrape album URLs from the artist page
+artist_page <- tryCatch(read_html(artist_url), error = function(e) NULL)
+
+if (!is.null(artist_page)) {
+  album_urls <- artist_page %>%
+    html_nodes("a[href*='/albums/Tyler-the-creator/']") %>%
+    html_attr("href") %>%
+    unique()
+  
+  # Loop through each album
+  for (album_url in album_urls) {
+    Sys.sleep(2)  # Delay to prevent rate-limiting
+    
+    # Extract album name
+    album_name <- str_extract(album_url, "/albums/Tyler-the-creator/[^/]+") %>%
+      str_replace("/albums/Tyler-the-creator/", "") %>%
+      str_replace_all("-", " ") %>%
+      str_to_title()
+    
+    # Create folder for the album
+    album_folder <- file.path(artist_name, album_name)
+    dir.create(album_folder, showWarnings = FALSE)
+    
+    # Try to read the album page
+    album_page <- tryCatch(read_html(album_url), error = function(e) NULL)
+    
+    if (!is.null(album_page)) {
+      song_urls <- album_page %>%
+        html_nodes("a[href*='/Tyler-the-creator-']") %>%
+        html_attr("href") %>%
+        unique()
+      
+      # Loop through each song and save lyrics
+      for (song_url in song_urls) {
+        Sys.sleep(2)  # Delay between requests
+        
+        # Extract song name
+        song_name <- str_extract(song_url, "Tyler-the-creator-[^/]+") %>%
+          str_replace("Tyler-the-creator-", "") %>%
+          str_replace_all("-", " ") %>%
+          str_to_title() %>%
+          paste0(".txt")
+        
+        # Try to read the song page
+        song_page <- tryCatch(read_html(song_url), error = function(e) NULL)
+        
+        if (!is.null(song_page)) {
+          # Extract lyrics
+          lyrics <- song_page %>%
+            html_nodes("div[data-lyrics-container='true']") %>%
+            html_text() %>%
+            str_squish()
+          
+          if (length(lyrics) > 0) {  # Check if lyrics were found
+            file_path <- file.path(album_folder, song_name)
+            
+            # Try to write the file
+            tryCatch({
+              writeLines(lyrics, file_path)
+              print(paste("Saved:", file_path))
+            }, error = function(e) {
+              print(paste("Error writing file:", file_path))
+            })
+          } else {
+            print(paste("No lyrics found for:", song_name))
+          }
+        } else {
+          print(paste("Error loading song page:", song_url))
+        }
+      }
+    } else {
+      print(paste("Error loading album page:", album_url))
+    }
+  }
+} else {
+  print("Error loading artist page.")
+}
+```
+
+# MF DOOM
+```{r}
+library(rvest)
+library(stringr)
+library(httr)
+library(dplyr)
+
+# Set artist name and Genius artist page URL
+artist_name <- "MF DOOM"
+artist_url <- "https://genius.com/artists/Mf-doom"
+
+# Create main artist folder
+dir.create(artist_name, showWarnings = FALSE)
+
+# Scrape album URLs from the artist page
+artist_page <- tryCatch(read_html(artist_url), error = function(e) NULL)
+
+if (!is.null(artist_page)) {
+  album_urls <- artist_page %>%
+    html_nodes("a[href*='/albums/Mf-doom/']") %>%
+    html_attr("href") %>%
+    unique()
+  
+  # Loop through each album
+  for (album_url in album_urls) {
+    Sys.sleep(2)  # Delay to prevent rate-limiting
+    
+    # Extract album name
+    album_name <- str_extract(album_url, "/albums/Mf-doom/[^/]+") %>%
+      str_replace("/albums/Mf-doom/", "") %>%
+      str_replace_all("-", " ") %>%
+      str_to_title()
+    
+    # Create folder for the album
+    album_folder <- file.path(artist_name, album_name)
+    dir.create(album_folder, showWarnings = FALSE)
+    
+    # Try to read the album page
+    album_page <- tryCatch(read_html(album_url), error = function(e) NULL)
+    
+    if (!is.null(album_page)) {
+      song_urls <- album_page %>%
+        html_nodes("a[href*='/Mf-doom-']") %>%
+        html_attr("href") %>%
+        unique()
+      
+      # Loop through each song and save lyrics
+      for (song_url in song_urls) {
+        Sys.sleep(2)  # Delay between requests
+        
+        # Extract song name
+        song_name <- str_extract(song_url, "Mf-doom-[^/]+") %>%
+          str_replace("Mf-doom-", "") %>%
+          str_replace_all("-", " ") %>%
+          str_to_title() %>%
+          paste0(".txt")
+        
+        # Try to read the song page
+        song_page <- tryCatch(read_html(song_url), error = function(e) NULL)
+        
+        if (!is.null(song_page)) {
+          # Extract lyrics
+          lyrics <- song_page %>%
+            html_nodes("div[data-lyrics-container='true']") %>%
+            html_text() %>%
+            str_squish()
+          
+          if (length(lyrics) > 0) {  # Check if lyrics were found
+            file_path <- file.path(album_folder, song_name)
+            
+            # Try to write the file
+            tryCatch({
+              writeLines(lyrics, file_path)
+              print(paste("Saved:", file_path))
+            }, error = function(e) {
+              print(paste("Error writing file:", file_path))
+            })
+          } else {
+            print(paste("No lyrics found for:", song_name))
+          }
+        } else {
+          print(paste("Error loading song page:", song_url))
+        }
+      }
+    } else {
+      print(paste("Error loading album page:", album_url))
+    }
+  }
+} else {
+  print("Error loading artist page.")
+}
+```
