@@ -4,6 +4,13 @@ author: "Daren Sathasivam"
 date: "`r Sys.Date()`"
 output: pdf_document
 ---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Derek - webscrape
+##  Tyler, The Creator
 ```{r}
 library(rvest)
 library(stringr)
@@ -96,231 +103,99 @@ if (!is.null(artist_page)) {
 }
 ```
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-library(geniusr)
-
-Sys.setenv(GENIUS_API_TOKEN = "yxwe42jdT0MvORWPgZ4HdKyNx9axVEQWPCvjkSQ0zjGNUYZ2mGIqBrAuW9CpUAWG")
-
-# --- Client ID --- #
-# naXHkMhBTywrOh0ova7Pmh_7tTOcFJ1EpQfKTNvZlyM4wsRPZL7m_--NCwt6an32
-
-# --- Client Secret --- #
-# c_1ut-Bgqy7agNISeCTTET6A68C5hxiFiBqB7UFGXQDE4pgmcDewv4pUHIn3cbVWWMHua3lKrh2YLJRtNmxu7Q
-
-# --- Client Access Token --- #
-# yxwe42jdT0MvORWPgZ4HdKyNx9axVEQWPCvjkSQ0zjGNUYZ2mGIqBrAuW9CpUAWG
-genius_token(yxwe42jdT0MvORWPgZ4HdKyNx9axVEQWPCvjkSQ0zjGNUYZ2mGIqBrAuW9CpUAWG)
-
-# Check if token is working:
-search_genius("MF DOOM")
-search_artist("MF DOOM")
-```
-
-
-# Album to txt
+# Derek - webscrape
+## MF DOOM
 ```{r}
 library(rvest)
 library(stringr)
 library(httr)
-
-# Create album folder
-album_name <- "Late Registration"
-dir.create(album_name, showWarnings = FALSE)
-
-# Genius album page URL
-album_url <- "https://genius.com/albums/Kanye-west/Late-registration"
-
-# Scrape song URLs from album page
-album_page <- read_html(album_url)
-ong_urls <- album_page %>%
-  html_nodes("a[href*='/Kanye-west-']") %>%
-  html_attr("href") %>%
-  unique()# Remove duplicates
-
-# Loop through each song and save lyrics
-for (url in song_urls) {
-  song_name <- str_extract(url, "Kanye-west-[^/]+") %>%
-    str_replace("Kanye-west-", "") %>%
-    paste0(".txt")
-
-  # Read the HTML page
-  page <- read_html(url)
-  
-  # Extract lyrics
-  lyrics <- page %>%
-    html_nodes("div[data-lyrics-container='true']") %>%
-    html_text() %>%
-    str_squish()
-
-  # Define file path
-  file_path <- file.path(album_name, song_name)
-
-  # Write lyrics to file
-  writeLines(lyrics, file_path)
-  
-  print(paste("Saved:", file_path))
-}
-```
-
-
-
-# Artist to txt w/o geniusr
-
-```{r}
-library(rvest)
-library(stringr)
-library(httr)
-library(purrr)
 library(dplyr)
 
-# MAIN FUNCTION -----------------------------------------------------------
-scrape_artist_discography <- function(artist_slug, artist_num) {
-  # Configuration -- stackexhange
-  user_agent <- "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36"
-  base_dir <- "/Users/darensivam/Desktop/UCLA/Year 4/Winter/133/Final Project/lyrics/"
-  output_dir <- file.path(base_dir, paste0("artist", artist_num))
-  
-  # Setup directories and logging
-  dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
-  log_file <- file.path(output_dir, "scrape_errors.log")
-  write(paste("Scraping started for", artist_slug, "at", Sys.time()), log_file)
-  
-  # Create a simple metadata file
-  writeLines(
-    c(paste("Artist:", str_replace_all(artist_slug, "-", " ")),
-      paste("Scraped:", Sys.time()),
-      paste("Source:", "Genius.com")),
-    file.path(output_dir, "_metadata.txt")
-  )  # <-- Important: closing parenthesis for writeLines()
-  
-  # Safe HTML reading with random delay (for courtesy)
-  safe_read <- safely(function(url) {
-    Sys.sleep(runif(1, 0.8, 2.2))  # Random delay between 0.8 and 2.2s
-    read_html(httr::GET(url, user_agent(user_agent)))
-  })
-  
-  # Get all album links ---------------------------------------------------
-  artist_albums_url <- paste0("https://genius.com/artists/", artist_slug, "/albums")
-  album_page_result <- safe_read(artist_albums_url)
-  
-  if (is.null(album_page_result$result)) {
-    write("Failed to access artist albums page", log_file, append = TRUE)
-    return(invisible())
-  }
-  
-  # Extract album URLs
-  album_urls <- album_page_result$result %>%
-    html_nodes(xpath = paste0("//a[contains(@href, '/albums/", artist_slug, "')]")) %>%
+# Set artist name and Genius artist page URL
+artist_name <- "MF DOOM"
+artist_url <- "https://genius.com/artists/Mf-doom"
+
+# Create main artist folder
+dir.create(artist_name, showWarnings = FALSE)
+
+# Scrape album URLs from the artist page
+artist_page <- tryCatch(read_html(artist_url), error = function(e) NULL)
+
+if (!is.null(artist_page)) {
+  album_urls <- artist_page %>%
+    html_nodes("a[href*='/albums/Mf-doom/']") %>%
     html_attr("href") %>%
-    discard(~ str_detect(.x, "photos|videos|trivia|about")) %>%
-    paste0("https://genius.com", .) %>%
     unique()
   
-  # Helper function to process each album
-  process_album <- function(album_url) {
-    album_html_result <- safe_read(album_url)
-    if (is.null(album_html_result$result)) {
-      write(paste("Album failed:", album_url), log_file, append = TRUE)
-      return()
-    }
+  # Loop through each album
+  for (album_url in album_urls) {
+    Sys.sleep(2)  # Delay to prevent rate-limiting
     
     # Extract album name
-    album_name <- album_html_result$result %>%
-      html_node("h1.header_with_cover_art-primary_info-title") %>%
-      html_text() %||%
-      # fallback if the above node is missing
-      str_extract(album_url, paste0("(?<=", artist_slug, "/).*$")) %>%
+    album_name <- str_extract(album_url, "/albums/Mf-doom/[^/]+") %>%
+      str_replace("/albums/Mf-doom/", "") %>%
       str_replace_all("-", " ") %>%
       str_to_title()
     
-    # Clean the album name for file system
-    clean_album_name <- album_name %>%
-      str_remove_all("[^[:alnum:] ]") %>%
-      str_squish()
+    # Create folder for the album
+    album_folder <- file.path(artist_name, album_name)
+    dir.create(album_folder, showWarnings = FALSE)
     
-    # Create album directory
-    album_dir <- file.path(output_dir, clean_album_name)
-    dir.create(album_dir, showWarnings = FALSE)
+    # Try to read the album page
+    album_page <- tryCatch(read_html(album_url), error = function(e) NULL)
     
-    # Extract all song URLs from the album page
-    # This XPath looks for links containing '-lyrics' but not 'annotated'
-    song_urls <- album_html_result$result %>%
-      html_nodes(xpath = "//a[contains(@href, '-lyrics') and not(contains(@href, 'annotated'))]") %>%
-      html_attr("href") %>%
-      unique()
-    
-    if (length(song_urls) == 0) return()
-    
-    # Progress bar for songs
-    pb <- txtProgressBar(min = 0, max = length(song_urls), style = 3)
-    message("\nProcessing album: ", album_name)
-    
-    walk2(song_urls, seq_along(song_urls), function(song_url, idx) {
-      tryCatch({
-        song_html_result <- safe_read(song_url)
-        if (is.null(song_html_result$result)) {
-          write(paste("Song failed:", song_url), log_file, append = TRUE)
-          return()
-        }
+    if (!is.null(album_page)) {
+      song_urls <- album_page %>%
+        html_nodes("a[href*='/Mf-doom-']") %>%
+        html_attr("href") %>%
+        unique()
+      
+      # Loop through each song and save lyrics
+      for (song_url in song_urls) {
+        Sys.sleep(2)  # Delay between requests
         
-        # Extract/clean song title
-        song_title <- song_html_result$result %>%
-          html_node("h1[class*='SongHeader__Title']") %>%
-          html_text() %||%
-          str_extract(song_url, paste0("(?<=", artist_slug, "/).*(?=-lyrics)")) %>%
+        # Extract song name
+        song_name <- str_extract(song_url, "Mf-doom-[^/]+") %>%
+          str_replace("Mf-doom-", "") %>%
           str_replace_all("-", " ") %>%
-          str_to_title()
-        
-        clean_song_title <- song_title %>%
-          str_remove_all("[^[:alnum:] ']+") %>%
-          str_squish() %>%
+          str_to_title() %>%
           paste0(".txt")
         
-        # Check if already exists
-        file_path <- file.path(album_dir, clean_song_title)
-        if (file.exists(file_path)) return()
+        # Try to read the song page
+        song_page <- tryCatch(read_html(song_url), error = function(e) NULL)
         
-        # Extract lyrics
-        lyrics <- song_html_result$result %>%
-          html_nodes("div[data-lyrics-container='true'], .Lyrics__Container") %>%
-          html_text() %>%
-          paste(collapse = "\n") %>%
-          str_remove_all("\\[[^\\]]*\\]") %>%
-          str_squish()
-        
-        # If we have non-empty lyrics, write them out
-        if (nzchar(lyrics)) {
-          writeLines(lyrics, file_path)
+        if (!is.null(song_page)) {
+          # Extract lyrics
+          lyrics <- song_page %>%
+            html_nodes("div[data-lyrics-container='true']") %>%
+            html_text() %>%
+            str_squish()
+          
+          if (length(lyrics) > 0) {  # Check if lyrics were found
+            file_path <- file.path(album_folder, song_name)
+            
+            # Try to write the file
+            tryCatch({
+              writeLines(lyrics, file_path)
+              print(paste("Saved:", file_path))
+            }, error = function(e) {
+              print(paste("Error writing file:", file_path))
+            })
+          } else {
+            print(paste("No lyrics found for:", song_name))
+          }
+        } else {
+          print(paste("Error loading song page:", song_url))
         }
-        
-      }, error = function(e) {
-        write(paste("Error processing", song_url, ":", e$message), log_file, append = TRUE)
-      })
-      
-      # Update progress
-      setTxtProgressBar(pb, idx)
-    })
-    
-    close(pb)
+      }
+    } else {
+      print(paste("Error loading album page:", album_url))
+    }
   }
-  
-  # Iterate over all albums
-  walk(album_urls, process_album)
-  
-  # Wrap up
-  write(paste("Scraping completed for", artist_slug, "at", Sys.time()), log_file, append = TRUE)
+} else {
+  print("Error loading artist page.")
 }
-
-# USAGE -------------------------------------------------------------------
-# Scrape Doom
-scrape_artist_discography("Mf-doom", 1)
-
-# Scrape Tyler
-# scrape_artist_discography("Tyler-the-creator", 2)
 ```
-
-
 
 
 
@@ -332,6 +207,22 @@ library(dplyr)
 library(purrr)
 library(stringr)
 library(fs)
+
+# Sys.setenv(GENIUS_API_TOKEN = "yxwe42jdT0MvORWPgZ4HdKyNx9axVEQWPCvjkSQ0zjGNUYZ2mGIqBrAuW9CpUAWG")
+
+# --- Client ID --- #
+# naXHkMhBTywrOh0ova7Pmh_7tTOcFJ1EpQfKTNvZlyM4wsRPZL7m_--NCwt6an32
+
+# --- Client Secret --- #
+# c_1ut-Bgqy7agNISeCTTET6A68C5hxiFiBqB7UFGXQDE4pgmcDewv4pUHIn3cbVWWMHua3lKrh2YLJRtNmxu7Q
+
+# --- Client Access Token --- #
+# yxwe42jdT0MvORWPgZ4HdKyNx9axVEQWPCvjkSQ0zjGNUYZ2mGIqBrAuW9CpUAWG
+# genius_token(yxwe42jdT0MvORWPgZ4HdKyNx9axVEQWPCvjkSQ0zjGNUYZ2mGIqBrAuW9CpUAWG)
+# 
+# # Check if token is working:
+# search_genius("MF DOOM")
+# search_artist("MF DOOM")
 
 scrape_artist_discography <- function(artist_name, artist_num) {
   # Setup directories --- paste ur directory below
@@ -407,8 +298,145 @@ scrape_artist_discography("Tyler, the Creator", 2)
 ```
 
 
+# Ethan - Extract txt from discography
 
-# Extract txt from discography
+```{r}
+library(dplyr)
+library(stringr)
+library(tidytext)
+library(readtext)
+library(tidyr)
+library(quanteda)
+library(tm)
+
+Tyler_albums <- readtext("/Users/darensivam/Desktop/UCLA/Year 4/Winter/133/Final Project/lyrics/Tyler, The Creator")
+Tyler_combined <- paste(Tyler_albums$text, collapse = " ")
+
+# See what needs to be filtered out
+# Tyler_combined
+
+# Some of the sentences include who is speaking in brackets, so we need to filter that out
+Tyler_combined_clean <- gsub("\\[.*?\\]", "", Tyler_combined)
+
+# Some of the words did not get spaced properly between verses, ex. arriveIn, so we need to add space for that
+Tyler_combined_clean <- gsub("([A-Z])", " \\1", Tyler_combined_clean)
+
+# Random /n in the string, needed to be removed
+Tyler_combined_clean <- gsub("\n", " ", Tyler_combined_clean)
+
+
+Tyler_corp <- Corpus(VectorSource(Tyler_combined_clean))
+
+Tyler_corp <- tm_map(Tyler_corp, content_transformer(tolower)) 
+Tyler_corp <- tm_map(Tyler_corp, removePunctuation)  
+Tyler_corp <- tm_map(Tyler_corp, removeNumbers) 
+Tyler_corp <- tm_map(Tyler_corp, stripWhitespace)
+Tyler_corp <- tm_map(Tyler_corp, removeWords, stopwords("en"))  
+
+# inspect(Tyler_corp)
+
+# Inspection looks good, making DTM
+DocumentTermMatrix(Tyler_corp)
+
+Tyler_t <- tokens(corpus(Tyler_corp))
+
+# ---------------------------------------------------------------------------------------------------------------
+
+
+Doom_albums <- readtext("/Users/darensivam/Desktop/UCLA/Year 4/Winter/133/Final Project/lyrics/MF DOOM")
+Doom_combined <- paste(Doom_albums$text, collapse = " ")
+
+# Doom_combined
+
+Doom_combined_clean <- gsub("\\[.*?\\]", "", Doom_combined)
+Doom_combined_clean <- gsub("([A-Z])", " \\1", Doom_combined_clean)
+Doom_combined_clean <- gsub("\n", " ", Doom_combined_clean)
+
+Doom_corp <- Corpus(VectorSource(Doom_combined_clean))
+
+Doom_corp <- tm_map(Doom_corp, content_transformer(tolower)) 
+Doom_corp <- tm_map(Doom_corp, removePunctuation)  
+Doom_corp <- tm_map(Doom_corp, removeNumbers) 
+Doom_corp <- tm_map(Doom_corp, stripWhitespace)
+Doom_corp <- tm_map(Doom_corp, removeWords, stopwords("en"))  
+
+
+# inspect(Doom_corp)
+
+# Inspection looks good, making DTM
+DocumentTermMatrix(Doom_corp)
+
+Doom_t <- tokens(corpus(Doom_corp))
+```
+
+
+#  Data cleaned -> proceed with text mining methods/steps
+
+```{r}
+# 1. Clean data for specific terms and expressions
+head(Doom_combined_clean)
+head(Tyler_combined_clean)
+
+# 2. String distances
+
+
+# 3. Graphical displays of text data
+
+# 4. Natural language processing: stemming, parts-of-speech tagging
+
+# 5. Tokenization and lemmatization
+
+# 6. Creating Corpus
+
+# 7. Creating Document term matrix
+
+# 8. Analysizng Word and Document Frequency: TF-idf
+
+# 9. Relationships Btween Words: N-grams and Correlations
+
+```
+# Sentiment Analysis
+
+```{r}
+# Use lexicons such as afinn and bing
+
+```
+
+
+# Statistical topic detection modeling (Latennt Dirichlet Allocation)
+
+```{r}
+
+```
+
+
+# Automatic classification using predictive modeling based on text data. (if feasible)
+```{r}
+
+```
+
+
+# Data Clustering (if feasible)
+
+```{r}
+
+```
+
+
+# Visualization of correlations & topics
+
+```{r}
+
+```
+
+# Comparing Authors, chapters, ... (if feasible)
+
+```{r}
+
+```
+
+
+# Document similarities & Text alignment
 
 ```{r}
 
