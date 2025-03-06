@@ -369,37 +369,115 @@ DocumentTermMatrix(Doom_corp)
 Doom_t <- tokens(corpus(Doom_corp))
 ```
 
+# Outline of things to do:
+
+- 1. Word Analysis: Sentiment Analysis, Word Clouds
+- 2. N-grams: Bi-grams by counts, Negation Analysis
+- 3. Topic Modeling: LDA, Topic Distribution by Source, then Random Forest
+
 
 #  Data cleaned -> proceed with text mining methods/steps
 
 ```{r}
+library(ggplot2)
 # 1. Clean data for specific terms and expressions
-head(Doom_combined_clean)
-head(Tyler_combined_clean)
+censor_words <- function(text) {
+  text <- gsub("\\b(n|N)(i|I)(g|G){2}", "\\1\\2**", text, perl = TRUE)
+  text <- gsub("\\b(f|F)(a|A)(g|G){2}", "\\1\\2**", text, perl = TRUE)
+  return(text)
+}
+Tyler_combined_clean <- censor_words(Tyler_combined_clean)
+Doom_combined_clean <- censor_words(Doom_combined_clean)
+# head(Doom_combined_clean, 1)
+# head(Tyler_combined_clean, 1)
+
 
 # 2. String distances
+library(stringdist)
+tyler_lines <- unlist(strsplit(Tyler_combined_clean, "\\.\\s+"))
+doom_lines <- unlist(strsplit(Doom_combined_clean, "\\.\\s+"))
+dist_mat <- stringdistmatrix(tyler_lines, doom_lines, method = "jw") # jw for Jaro-Wrinkler dists --- stackexhange ---
 
 
 # 3. Graphical displays of text data
+# Word freq comparison plot
+word_freq_df <- data.frame(word = c(names(topfeatures(dfm(Tyler_t), 10)), names(topfeatures(dfm(Doom_t), 10))),
+                           freq = c(topfeatures(dfm(Tyler_t), 10), topfeatures(dfm(Doom_t), 10)),
+                           artist = rep(c("Tyler", "Doom"), each = 10))
+ggplot(word_freq_df, aes(x = reorder(word, freq), y = freq, fill = artist)) +
+  geom_col() +
+  coord_flip() +
+  facet_wrap(~artist, scales = "free") +
+  labs(title = "Top 10 Words Comparison")
+
 
 # 4. Natural language processing: stemming, parts-of-speech tagging
+# Stemming
+tyler_stemmed <- tm_map(Tyler_corp, stemDocument)
+doom_stemmed <- tm_map(Doom_corp, stemDocument)
+# Parts-of-speech tagging
+library(udpipe) # stackechange
+ud_model <- udpipe_download_model(language = "english")
+tyler_pos <- udpipe(Tyler_combined_clean, "english")
+doom_pos <- udpipe(Doom_combined_clean, "english")
+
 
 # 5. Tokenization and lemmatization
+# Tokens w/ lemmatization -- different from Tyler_t and Doom_t
+tyler_tokens <- tyler_pos %>%
+  filter(upos %in% c("NOUN", "VERB", "ADJ")) %>%
+  select(token, lemma)
+doom_tokens <- doom_pos %>%
+  filter(upos %in% c("NOUN", "VERB", "ADJ")) %>%
+  select(token, lemma)
 
-# 6. Creating Corpus
+# 6. Creating Corpus - done above
 
-# 7. Creating Document term matrix
+# 7. Creating Document term matrix - done above
 
-# 8. Analysizng Word and Document Frequency: TF-idf
+# 8. Analyzing Word and Document Frequency: TF-idf
+tyler_tfidf <- weightTfIdf(DocumentTermMatrix(Tyler_corp))
+findMostFreqTerms(tyler_tfidf, n = 15)
+doom_tfidf <- weightTfIdf(DocumentTermMatrix(Doom_corp))
+findMostFreqTerms(doom_tfidf, n = 15)
 
 # 9. Relationships Btween Words: N-grams and Correlations
+# Bigrams
+tyler_bigrams <- Tyler_albums %>%
+  unnest_tokens(bigram, text, token = "ngrams", n = 2) %>%
+  count(bigram, sort = TRUE)
+doom_bigrams <- Doom_albums %>%
+  unnest_tokens(bigram, text, token = "ngrams", n = 2) %>%
+  count(bigram, sort = TRUE)
+# Word correlations
+tyler_tidy <- tidy(DocumentTermMatrix(Tyler_corp))
+tyler_word_cor <- tyler_tidy %>%
+  pairwise_cor(term, document, sort = TRUE)
+doom_tidy <- tidy(DocumentTermMatrix(Doom_corp))
+doom_word_cor <- doom_tidy %>%
+  pairwise_cor(term, document, sort = TRUE)
 
+
+### --- Other stuff --- ###
+# Readability index and average words per sentence
+# Word counts for each artist
+# Bigrams for each artist
+# Top bigrams across both arists
+# Word Clouds
+
+# Correlation Plot
+# term_freq <- colSums(gandhi_mat_sparse)
+# terms_freq_sorted <- sort(term_freq, decreasing = TRUE) head(terms_freq_sorted, 20)
+# plot(gandhi_dtm_sparse, terms = findFreqTerms(gandhi_dtm_sparse, lowfreq = 20), corThreshold = 0.33)
 ```
 # Sentiment Analysis
 
 ```{r}
 # Use lexicons such as afinn and bing
 
+# Sentiments using ncr
+# Positive and negative sentiments for each artist
+# Other sentiment trends (9 emotions)
 ```
 
 
@@ -432,7 +510,10 @@ head(Tyler_combined_clean)
 # Comparing Authors, chapters, ... (if feasible)
 
 ```{r}
-
+# Sentiment comparison between artists
+# Comparison of Negative trends
+# Comparison of positive trends
+# Correlation Plot for each artist
 ```
 
 
