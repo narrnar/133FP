@@ -542,8 +542,56 @@ ggplot(readability_df, aes(x = Artist, y = FK_Grade, fill = Artist)) +
   labs(title = "Readability Comparison", y = "Flesch-Kincaid Grade Level")
 
 
+
 # Bigrams for each artist
-# Top bigrams across both artists
+tyler_df <- tibble(text = Tyler_combined_clean)
+tyler_bigrams <- tyler_df %>%
+  unnest_tokens(bigram, text, token = "ngrams", n = 2) %>%
+  separate(bigram, c("word1", "word2"), sep = " ") %>%
+  filter(!word1 %in% stop_words$word,
+         !word2 %in% stop_words$word,
+         !is.na(word1)) %>%
+  unite(bigram, word1, word2, sep = " ") %>%
+  count(bigram, sort = TRUE) %>%
+  top_n(15, n)
+doom_df <- tibble(text = Doom_combined_clean)
+doom_bigrams <- doom_df %>%
+  unnest_tokens(bigram, text, token = "ngrams", n = 2) %>%
+  separate(bigram, c("word1", "word2"), sep = " ") %>%
+  filter(!word1 %in% stop_words$word,
+         !word2 %in% stop_words$word,
+         !is.na(word1)) %>%
+  unite(bigram, word1, word2, sep = " ") %>%
+  count(bigram, sort = TRUE) %>%
+  top_n(15, n)
+# Combined bigram
+combined_bigrams <- bind_rows(
+  mutate(tyler_bigrams, artist = "Tyler, The Creator"),
+  mutate(doom_bigrams, artist = "MF DOOM")
+) %>%
+  group_by(bigram) %>%
+  summarise(total = sum(n)) %>%
+  arrange(desc(total)) %>%
+  top_n(15, total)
+# Bigram Visualizations
+ggplot(tyler_bigrams, aes(x = reorder(bigram, n), y = n)) +
+  geom_col(fill = "goldenrod") +
+  coord_flip() +
+  labs(title = "Top Bigrams in Tyler, The Creator's Lyrics",
+       x = "Bigram", y = "Frequency") +
+  theme_minimal()
+ggplot(doom_bigrams, aes(x = reorder(bigram, n), y = n)) +
+  geom_col(fill = "lightblue") +
+  coord_flip() +
+  labs(title = "Top Bigrams in MF DOOM's Lyrics",
+       x = "Bigram", y = "Frequency") +
+  theme_minimal()
+ggplot(combined_bigrams, aes(x = reorder(bigram, total), y = total)) +
+  geom_col(fill = "salmon") +
+  coord_flip() +
+  labs(title = "Most Frequent Bigrams Across Both Artists",
+       x = "Bigram", y = "Total Frequency") +
+  theme_minimal()
 ```
 
 
@@ -551,11 +599,100 @@ ggplot(readability_df, aes(x = Artist, y = FK_Grade, fill = Artist)) +
 
 ```{r}
 # Use lexicons such as afinn and bing
-
 # Sentiments using ncr
 # Positive and negative sentiments for each artist
 # Other sentiment trends (9 emotions)
 # Word clouds
+library(reshape2)
+
+tyler_df <- tibble(text = Tyler_combined_clean, artist = "Tyler, The Creator")
+doom_df <- tibble(text = Doom_combined_clean, artist = "MF DOOM")
+combined_df <- bind_rows(tyler_df, doom_df)
+tidy_lyrics <- combined_df %>%
+  unnest_tokens(word, text)
+
+# 1. AFINN Sentiment Analysis
+afinn_sentiment <- tidy_lyrics %>%
+  inner_join(get_sentiments("afinn"), by = "word") %>%
+  group_by(artist) %>%
+  summarize(sentiment_score = sum(value))
+ggplot(afinn_sentiment, aes(x = artist, y = sentiment_score, fill = artist)) +
+  geom_col() +
+  labs(title = "AFINN Sentiment Scores by Artist",
+       x = "Artist", y = "Sentiment Score") +
+  theme_minimal()
+
+# 2. BING Sentiment Analysis
+bing_sentiment <- tidy_lyrics %>%
+  inner_join(get_sentiments("bing"), by = "word") %>%
+  count(artist, sentiment) %>%
+  pivot_wider(names_from = sentiment, values_from = n, values_fill = 0) %>%
+  mutate(sentiment_ratio = positive / (positive + negative))
+ggplot(bing_sentiment, aes(x = artist, y = sentiment_ratio, fill = artist)) +
+  geom_col() +
+  labs(title = "Positive/Negative Ratio (Bing Lexicon)",
+       x = "Artist", y = "Positive Ratio") +
+  ylim(0, 1) +
+  theme_minimal()
+
+# 3. NRC Sentiment Analysis
+nrc_sentiment <- tidy_lyrics %>%
+  inner_join(get_sentiments("nrc"), by = "word") %>%
+  filter(sentiment %in% c("positive", "negative")) %>%
+  count(artist, sentiment)
+ggplot(nrc_sentiment, aes(x = sentiment, y = n, fill = artist)) +
+  geom_col(position = "dodge") +
+  labs(title = "Positive/Negative Sentiment (NRC Lexicon)",
+       x = "Sentiment", y = "Count") +
+  theme_minimal()
+
+# 4. Emotion Analysis
+nrc_emotions <- tidy_lyrics %>%
+  inner_join(get_sentiments("nrc"), by = "word") %>%
+  filter(!sentiment %in% c("positive", "negative")) %>%
+  count(artist, sentiment)
+ggplot(nrc_emotions, aes(x = reorder(sentiment, n), y = n, fill = artist)) +
+  geom_col(position = "dodge") +
+  coord_flip() +
+  labs(title = "Emotional Sentiment Distribution (NRC Lexicon)",
+       x = "Emotion", y = "Count") +
+  theme_minimal()
+
+# 5. Word Clouds
+# Tyler Word Cloud
+tyler_words <- tidy_lyrics %>%
+  filter(artist == "Tyler, The Creator") %>%
+  count(word, sort = TRUE)
+wordcloud(words = tyler_words$word, freq = tyler_words$n,
+          max.words = 100, random.order = FALSE,
+          colors = brewer.pal(8, "Dark2"),
+          main = "Tyler, The Creator - Most Frequent Words")
+# MF DOOM Word Cloud
+doom_words <- tidy_lyrics %>%
+  filter(artist == "MF DOOM") %>%
+  count(word, sort = TRUE)
+wordcloud(words = doom_words$word, freq = doom_words$n,
+          max.words = 100, random.order = FALSE,
+          colors = brewer.pal(8, "Dark2"),
+          main = "MF DOOM - Most Frequent Words")
+# Tyler Sentiment Cloud
+tyler_bing <- tidy_lyrics %>%
+  filter(artist == "Tyler, The Creator") %>%
+  inner_join(get_sentiments("bing"), by = "word") %>%
+  count(word, sentiment, sort = TRUE) %>%
+  acast(word ~ sentiment, value.var = "n", fill = 0)
+comparison.cloud(tyler_bing, colors = c("red", "green"),
+                 max.words = 100, title.size = 1.5,
+                 main = "Tyler, The Creator - Sentiment Word Cloud")
+# MF DOOM Sentiment Cloud
+doom_bing <- tidy_lyrics %>%
+  filter(artist == "MF DOOM") %>%
+  inner_join(get_sentiments("bing"), by = "word") %>%
+  count(word, sentiment, sort = TRUE) %>%
+  acast(word ~ sentiment, value.var = "n", fill = 0)
+comparison.cloud(doom_bing, colors = c("red", "green"),
+                 max.words = 100, title.size = 1.5,
+                 main = "MF DOOM - Sentiment Word Cloud")
 ```
 
 
