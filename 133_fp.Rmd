@@ -592,6 +592,84 @@ ggplot(combined_bigrams, aes(x = reorder(bigram, total), y = total)) +
   labs(title = "Most Frequent Bigrams Across Both Artists",
        x = "Bigram", y = "Total Frequency") +
   theme_minimal()
+
+# Negation Analyis
+negation_words <- c("not", "no", "never", "none", "nobody", 
+                    "nothing", "n't", "cannot", "without")
+# --- Tyler Negation --- #
+tyler_bigrams <- tyler_df %>%
+  unnest_tokens(bigram, text, token = "ngrams", n = 2) %>%
+  separate(bigram, into = c("word1", "word2"), sep = " ", remove = FALSE) %>%
+  filter(!is.na(word1), !is.na(word2)) %>%
+  mutate(is_negation = word1 %in% negation_words)
+tyler_negation_bigrams <- tyler_bigrams %>%
+  filter(is_negation)
+# Negation with bing sentiment
+tyler_negation_sentiment <- tyler_negation_bigrams %>%
+  inner_join(get_sentiments("bing"), by = c("word2" = "word"))
+tyler_negation_sentiment_flipped <- tyler_negation_sentiment %>%
+  mutate(flipped = ifelse(sentiment == "positive", "negative", "positive"))
+tyler_negation_summary <- tyler_negation_sentiment_flipped %>%
+  count(word2, sentiment, flipped, sort = TRUE)
+# tyler_negation_summary
+ggplot(tyler_negation_summary, aes(x = flipped, y = n, fill = flipped)) +
+  geom_col(show.legend = FALSE) +
+  labs(
+    title = "Number of Words Flipped by Negation (Tyler)",
+    x = NULL, 
+    y = "Count of Negation Bigrams"
+  ) +
+  theme_minimal()
+most_negated_words <- tyler_negation_sentiment_flipped %>%
+  count(word2, sentiment, flipped, sort = TRUE) %>%
+  slice_max(n, n = 15)  # top 15 negated words
+ggplot(most_negated_words, aes(x = reorder(word2, n), y = n, fill = sentiment)) +
+  geom_col() +
+  coord_flip() +
+  facet_wrap(~ flipped, scales = "free") +
+  labs(
+    title = "Most Common Negated Words (Tyler)",
+    x = "Word That Was Negated", 
+    y = "Count"
+  ) +
+  theme_minimal()
+# --- DOOM Negation --- #
+doom_bigrams <- doom_df %>%
+  unnest_tokens(bigram, text, token = "ngrams", n = 2) %>%
+  separate(bigram, into = c("word1", "word2"), sep = " ", remove = FALSE) %>%
+  filter(!is.na(word1), !is.na(word2)) %>%
+  mutate(is_negation = word1 %in% negation_words)
+doom_negation_bigrams <- doom_bigrams %>%
+  filter(is_negation)
+# Negation with bing sentiment
+doom_negation_sentiment <- doom_negation_bigrams %>%
+  inner_join(get_sentiments("bing"), by = c("word2" = "word"))
+doom_negation_sentiment_flipped <- doom_negation_sentiment %>%
+  mutate(flipped = ifelse(sentiment == "positive", "negative", "positive"))
+doom_negation_summary <- doom_negation_sentiment_flipped %>%
+  count(word2, sentiment, flipped, sort = TRUE)
+# tyler_negation_summary
+ggplot(doom_negation_summary, aes(x = flipped, y = n, fill = flipped)) +
+  geom_col(show.legend = FALSE) +
+  labs(
+    title = "Number of Words Flipped by Negation (MF DOOM)",
+    x = NULL, 
+    y = "Count of Negation Bigrams"
+  ) +
+  theme_minimal()
+most_negated_words <- doom_negation_sentiment_flipped %>%
+  count(word2, sentiment, flipped, sort = TRUE) %>%
+  slice_max(n, n = 15)  # top 15 negated words
+ggplot(most_negated_words, aes(x = reorder(word2, n), y = n, fill = sentiment)) +
+  geom_col() +
+  coord_flip() +
+  facet_wrap(~ flipped, scales = "free") +
+  labs(
+    title = "Most Common Negated Words (MF DOOM)",
+    x = "Word That Was Negated", 
+    y = "Count"
+  ) +
+  theme_minimal()
 ```
 
 
@@ -693,6 +771,71 @@ doom_bing <- tidy_lyrics %>%
 comparison.cloud(doom_bing, colors = c("red", "green"),
                  max.words = 100, title.size = 1.5,
                  main = "MF DOOM - Sentiment Word Cloud")
+```
+
+
+```{r}
+# Negation Analysis --- USING CHATGPT/DEEPSEEK
+library(tidytext)
+library(dplyr)
+library(ggplot2)
+
+# Define negation words
+negation_words <- c("not", "no", "never", "without", "don't", "can't", "won't", 
+                    "nobody", "nowhere", "isnt", "wasnt", "didnt", "couldnt", 
+                    "shouldnt", "wouldnt", "hardly", "barely", "scarcely")
+# Process Tyler's negations
+tyler_negations <- tibble(text = Tyler_combined_clean) %>%
+  unnest_tokens(bigram, text, token = "ngrams", n = 2) %>%
+  separate(bigram, c("word1", "word2"), sep = " ") %>%
+  filter(word1 %in% negation_words,
+         !word2 %in% stop_words$word,
+         !is.na(word1)) %>%
+  inner_join(get_sentiments("bing"), by = c("word2" = "word")) %>%
+  count(word1, word2, sentiment, sort = TRUE) %>%
+  group_by(word1) %>%
+  slice_max(n, n = 5) %>%
+  ungroup()
+# Process MF DOOM's negations
+doom_negations <- tibble(text = Doom_combined_clean) %>%
+  unnest_tokens(bigram, text, token = "ngrams", n = 2) %>%
+  separate(bigram, c("word1", "word2"), sep = " ") %>%
+  filter(word1 %in% negation_words,
+         !word2 %in% stop_words$word,
+         !is.na(word1)) %>%
+  inner_join(get_sentiments("bing"), by = c("word2" = "word")) %>%
+  count(word1, word2, sentiment, sort = TRUE) %>%
+  group_by(word1) %>%
+  slice_max(n, n = 5) %>%
+  ungroup()
+# Visualization function for negations
+plot_negations <- function(data, artist_name) {
+  ggplot(data, aes(x = reorder(paste(word1, word2), n), y = n, fill = sentiment)) +
+    geom_col() +
+    coord_flip() +
+    scale_fill_manual(values = c("positive" = "forestgreen", "negative" = "firebrick")) +
+    labs(title = paste("Top Negated Terms in", artist_name, "Lyrics"),
+         x = "Negated Phrase", y = "Frequency") +
+    theme_minimal() +
+    theme(legend.position = "bottom")
+}
+# Generate plots
+plot_negations(tyler_negations, "Tyler, The Creator")
+plot_negations(doom_negations, "MF DOOM")
+# Combined negation analysis
+combined_negations <- bind_rows(
+  mutate(tyler_negations, artist = "Tyler"),
+  mutate(doom_negations, artist = "DOOM")
+) %>%
+  group_by(artist, sentiment) %>%
+  summarize(total = sum(n), .groups = "drop")
+# Sentiment comparison plot
+ggplot(combined_negations, aes(x = artist, y = total, fill = sentiment)) +
+  geom_col(position = "dodge") +
+  scale_fill_manual(values = c("positive" = "forestgreen", "negative" = "firebrick")) +
+  labs(title = "Negated Sentiment Comparison",
+       x = "Artist", y = "Count", fill = "Original Sentiment") +
+  theme_minimal()
 ```
 
 
