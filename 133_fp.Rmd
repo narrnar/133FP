@@ -309,6 +309,20 @@ library(tidyr)
 library(quanteda)
 library(tm)
 
+censor_words <- function(text) {
+  text <- gsub("\\b(n|N)(i|I)(g|G)(g|G)(a|A)\\b", "\\1\\2ooa", text, perl = TRUE)
+  text <- gsub("\\b(n|N)(i|I)(g|G)(g|G)(a|A)\\b", "\\1\\2ooas", text, perl = TRUE)
+  text <- gsub("\\b(n|N)(i|I)(g|G)(g|G)(e|E)(r|R)\\b", "\\1\\2ooer", text, perl = TRUE)
+  text <- gsub("\\b(f|F)(a|A)(g|G)(g|G)(o|O)(t|T)\\b", "\\1\\2ooot", text, perl = TRUE)
+  text <- gsub("\\b(n|N)(i|I)(g|G)(g|G)(\\w*)\\b", "\\1\\2oo\\5", text, perl = TRUE)
+  text <- gsub("\\b(f|F)(a|A)(g|G)(g|G)(\\w*)\\b", "\\1\\2oo\\5", text, perl = TRUE)
+  return(text)
+}
+
+remove_custom_punctuation <- content_transformer(function(text) {
+  gsub("[[:punct:]&&[^*]]", "", text)
+})
+
 Tyler_albums <- readtext("/Users/darensivam/Desktop/UCLA/Year 4/Winter/133/Final Project/lyrics/Tyler, The Creator")
 Tyler_combined <- paste(Tyler_albums$text, collapse = " ")
 
@@ -323,6 +337,7 @@ Tyler_combined_clean <- gsub("([A-Z])", " \\1", Tyler_combined_clean)
 
 # Random /n in the string, needed to be removed
 Tyler_combined_clean <- gsub("\n", " ", Tyler_combined_clean)
+Tyler_combined_clean <- censor_words(Tyler_combined_clean)
 
 
 Tyler_corp <- Corpus(VectorSource(Tyler_combined_clean))
@@ -351,6 +366,8 @@ Doom_combined <- paste(Doom_albums$text, collapse = " ")
 Doom_combined_clean <- gsub("\\[.*?\\]", "", Doom_combined)
 Doom_combined_clean <- gsub("([A-Z])", " \\1", Doom_combined_clean)
 Doom_combined_clean <- gsub("\n", " ", Doom_combined_clean)
+Doom_combined_clean <- censor_words(Doom_combined_clean)
+
 
 Doom_corp <- Corpus(VectorSource(Doom_combined_clean))
 
@@ -380,14 +397,10 @@ Doom_t <- tokens(corpus(Doom_corp))
 
 ```{r}
 library(ggplot2)
+library(wordcloud)
+library(wordcloud2)
+library(RColorBrewer)
 # 1. Clean data for specific terms and expressions
-censor_words <- function(text) {
-  text <- gsub("\\b(n|N)(i|I)(g|G){2}", "\\1\\2**", text, perl = TRUE)
-  text <- gsub("\\b(f|F)(a|A)(g|G){2}", "\\1\\2**", text, perl = TRUE)
-  return(text)
-}
-Tyler_combined_clean <- censor_words(Tyler_combined_clean)
-Doom_combined_clean <- censor_words(Doom_combined_clean)
 # head(Doom_combined_clean, 1)
 # head(Tyler_combined_clean, 1)
 
@@ -409,6 +422,17 @@ ggplot(word_freq_df, aes(x = reorder(word, freq), y = freq, fill = artist)) +
   coord_flip() +
   facet_wrap(~artist, scales = "free") +
   labs(title = "Top 10 Words Comparison")
+# Word Clouds -- basic for each artist
+tyler_dtm <- DocumentTermMatrix(Tyler_corp)
+tyler_matrix <- as.matrix(tyler_dtm)
+tyler_word_freq <- sort(colSums(tyler_matrix), decreasing = TRUE)
+set.seed(1)
+wordcloud(words = names(tyler_word_freq), freq = tyler_word_freq, min.freq = 5, max.words = 60, scale = c(4, 0.75), colors = brewer.pal(8, "Dark2"))
+doom_dtm <- DocumentTermMatrix(Doom_corp)
+doom_matrix <- as.matrix(doom_dtm)
+doom_word_freq <- sort(colSums(doom_matrix), decreasing = TRUE)
+set.seed(1)
+wordcloud(words = names(doom_word_freq), freq = doom_word_freq, min.freq = 5, max.words = 60, scale = c(4, 0.75), colors = brewer.pal(8, "Dark2"))
 
 
 # 4. Natural language processing: stemming, parts-of-speech tagging
@@ -456,20 +480,73 @@ tyler_word_cor <- tyler_tidy %>%
 doom_tidy <- tidy(DocumentTermMatrix(Doom_corp))
 doom_word_cor <- doom_tidy %>%
   pairwise_cor(term, document, sort = TRUE)
-
-
-### --- Other stuff --- ###
-# Readability index and average words per sentence
-# Word counts for each artist
-# Bigrams for each artist
-# Top bigrams across both arists
-# Word Clouds
-
-# Correlation Plot
-# term_freq <- colSums(gandhi_mat_sparse)
-# terms_freq_sorted <- sort(term_freq, decreasing = TRUE) head(terms_freq_sorted, 20)
-# plot(gandhi_dtm_sparse, terms = findFreqTerms(gandhi_dtm_sparse, lowfreq = 20), corThreshold = 0.33)
+# Correlation plots
+tyler_dtm_sparse <- removeSparseTerms(tyler_dtm, 0.90)
+doom_dtm_sparse <- removeSparseTerms(doom_dtm, 0.90)
+tyler_mat_sparse <- as.matrix(tyler_dtm_sparse)
+doom_mat_sparse <- as.matrix(doom_dtm_sparse)
+dim(tyler_mat_sparse)
+dim(doom_mat_sparse)
+tyler_sparse_freq <- colSums(tyler_mat_sparse)
+doom_sparse_freq <- colSums(doom_mat_sparse)
+tyler_sparse_freq <- sort(tyler_sparse_freq, decreasing = TRUE)
+doom_sparse_freq <- sort(doom_sparse_freq, decreasing = TRUE)
+head(tyler_sparse_freq, 15)
+head(doom_sparse_freq, 15)
+tyler_sparse_terms <- findFreqTerms(tyler_dtm_sparse, lowfreq = 500)
+doom_sparse_terms <- findFreqTerms(doom_dtm_sparse, lowfreq = 125)
+# Since corp is under one doc, the corr plot only turns out to be vertical bars because there are no multiple documents.
+plot(tyler_dtm_sparse, terms = tyler_sparse_terms, corThreshold = 0.1)
+plot(doom_dtm_sparse, terms = doom_sparse_terms, corThreshold = 0.1)
 ```
+
+
+```{r}
+##### ----- Other stuff ----- #####
+library(tokenizers)
+# Readability index and average words per sentence
+Tyler_qcorp <- corpus(Tyler_combined_clean)
+Doom_qcorp <- corpus(Doom_combined_clean)
+tyler_readability <- textstat_readability(Tyler_qcorp, measure = c("Flesch", "Flesch.Kincaid"))
+doom_readability  <- textstat_readability(Doom_qcorp, measure = c("Flesch", "Flesch.Kincaid"))
+tyler_sentences <- tokenize_sentences(Tyler_combined_clean)[[1]]
+doom_sentences <- tokenize_sentences(Doom_combined_clean)[[1]]
+yler_words_per_sent <- sapply(tokenize_words(tyler_sentences), length)
+doom_words_per_sent <- sapply(tokenize_words(doom_sentences), length)
+tyler_avg_words <- mean(tyler_words_per_sent[tyler_words_per_sent > 0])
+doom_avg_words <- mean(doom_words_per_sent[doom_words_per_sent > 0])
+
+cat("Tyler Readability:\n")
+print(tyler_readability)
+cat("\nDOOM Readability:\n")
+print(doom_readability)
+cat("\nAverage Words Per Sentence:\n")
+cat("Tyler:", round(tyler_avg_words, 1), "\n")
+cat("DOOM:", round(doom_avg_words, 1), "\n")
+# Word counts for each artist
+tyler_word_count <- ntoken(tyler_qcorp, remove_punct = TRUE)
+doom_word_count <- ntoken(doom_qcorp, remove_punct = TRUE)
+cat("\nTotal Word Counts:\n")
+cat("Tyler:", tyler_word_count, "\n")
+cat("DOOM:", doom_word_count, "\n")
+# Plot together:
+readability_df <- data.frame(
+  Artist = c("Tyler", "DOOM"),
+  Flesch = c(tyler_readability$Flesch, doom_readability$Flesch),
+  FK_Grade = c(tyler_readability$Flesch.Kincaid, doom_readability$Flesch.Kincaid),
+  Avg_Words_Per_Sent = c(tyler_avg_words, doom_avg_words),
+  Total_Words = c(tyler_word_count, doom_word_count)
+)
+ggplot(readability_df, aes(x = Artist, y = FK_Grade, fill = Artist)) +
+  geom_col() +
+  labs(title = "Readability Comparison", y = "Flesch-Kincaid Grade Level")
+
+
+# Bigrams for each artist
+# Top bigrams across both artists
+```
+
+
 # Sentiment Analysis
 
 ```{r}
@@ -478,6 +555,7 @@ doom_word_cor <- doom_tidy %>%
 # Sentiments using ncr
 # Positive and negative sentiments for each artist
 # Other sentiment trends (9 emotions)
+# Word clouds
 ```
 
 
