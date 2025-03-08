@@ -323,6 +323,8 @@ remove_custom_punctuation <- content_transformer(function(text) {
   gsub("[[:punct:]&&[^*]]", "", text)
 })
 
+data("stop_words")
+
 Tyler_albums <- readtext("/Users/darensivam/Desktop/UCLA/Year 4/Winter/133/Final Project/lyrics/Tyler, The Creator")
 Tyler_combined <- paste(Tyler_albums$text, collapse = " ")
 
@@ -773,6 +775,7 @@ comparison.cloud(doom_bing, colors = c("red", "green"),
                  main = "MF DOOM - Sentiment Word Cloud")
 ```
 
+# More Negation Analysis:
 
 ```{r}
 # Negation Analysis --- USING CHATGPT/DEEPSEEK
@@ -842,7 +845,101 @@ ggplot(combined_negations, aes(x = artist, y = total, fill = sentiment)) +
 # Statistical topic detection modeling (Latennt Dirichlet Allocation)
 
 ```{r}
+library(topicmodels)
+# Tyler_albums
+# Doom_albums
+Tyler_albums <- Tyler_albums %>%
+  mutate(artist = "Tyler")
+Doom_albums <- Doom_albums %>%
+  mutate(artist = "DOOM")
+combined_albums <- bind_rows(Tyler_albums, Doom_albums)
 
+# --- Change to album data instead of artist data --- #
+
+# Clean album text
+clean_album_text <- function(txt) {
+  txt <- censor_words(txt)
+  return(txt)
+}
+combined_albums <- combined_albums %>%
+  rowwise() %>%
+  mutate(cleaned_text = clean_album_text(text)) %>%
+  ungroup()
+
+# Tokenize
+custom_stops <- c("yeah", "uh", "huh")
+albums_tidy <- combined_albums %>%
+  unnest_tokens(word, cleaned_text) %>%
+  anti_join(stop_words, by = "word") %>%
+  filter(!word %in% custom_stops)
+albums_tidy %>%
+  count(doc_id, sort = TRUE)
+
+# DTM
+albums_dtm <- albums_tidy %>%
+  count(doc_id, word, sort = TRUE) %>%
+  cast_dtm(document = doc_id, term = word, value = n)
+albums_dtm
+
+# Fit LDA
+set.seed(123)
+albums_lda <- LDA(albums_dtm, k = 4, control = list(seed = 123))
+summary(albums_lda)
+albums_lda
+
+#.Word-Topic Probs
+topic_terms <- tidy(albums_lda, matrix = "beta")
+head(topic_terms)
+albums_top10 <- topic_terms %>%
+  group_by(topic) %>%
+  slice_max(beta, n = 6) %>%
+  ungroup() %>%
+  arrange(topic, -beta)
+albums_top10
+ggplot(albums_top10, aes(x = beta, reorder_within(term, beta, topic), fill = factor(topic))) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ topic, scales = "free_y") +
+  scale_y_reordered() +
+  labs(title = "Top 10 Words per Topic",
+       x = "Beta (Probability)",
+       y = "Term")
+
+# Gamma probs
+album_gamma <- tidy(albums_lda, matrix = "gamma")
+head(album_gamma)
+album_gamma <- album_gamma %>%
+  left_join(combined_albums %>% select(doc_id, artist), by = c("document" = "doc_id"))
+album_gamma %>% arrange(document, desc(gamma)) %>% head(10)
+top_topic <- album_gamma %>%
+  group_by(document, artist) %>%
+  slice_max(gamma, n = 1) %>%
+  ungroup()
+head(top_topic, 5)
+# Compare topics between artists
+artist_mean_topic <- album_gamma %>%
+  group_by(artist, topic) %>%
+  summarize(mean_gamma = mean(gamma), .group = "drop")
+ggplot(artist_mean_topic, aes(x = factor(topic), y = mean_gamma, fill = artist)) +
+  geom_col(position = "dodge") +
+  labs(title = "Average Topic Probability by Artist",
+       x = "Topic", y = "Mean Gamma")
+# Assign Each word to a topic -- similar to HW5 --> then plot/heatmap
+# use broom library for augment function -- RDocumentation
+library(broom)
+words_assigned <- augment(albums_lda, data = albums_dtm)
+head(words_assigned)
+words_assigned <- words_assigned %>%
+  left_join(combined_albums %>% select(doc_id, artist), by = c("document" = "doc_id")) %>%
+  group_by(artist, .topic) %>%
+  summarise(n = sum(count), .groups = "drop") %>%
+  mutate(prop = n/sum(n)) %>%
+  ungroup()
+ggplot(words_assigned, aes(x = factor(.topic), y = artist, fill = prop)) +
+  geom_tile(color = "white") +
+  scale_fill_gradient(low = "salmon", high = "lightblue") +
+  labs(title = "Proportion of Words Assigned to Topic by Arttist",
+       x = "Topic", y = "Artist", fill = "Prop") +
+  theme_minimal()
 ```
 
 
