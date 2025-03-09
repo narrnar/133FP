@@ -310,17 +310,23 @@ library(quanteda)
 library(tm)
 
 censor_words <- function(text) {
-  text <- gsub("\\b(n|N)(i|I)(g|G)(g|G)(a|A)\\b", "\\1\\2ooa", text, perl = TRUE)
-  text <- gsub("\\b(n|N)(i|I)(g|G)(g|G)(a|A)\\b", "\\1\\2ooas", text, perl = TRUE)
-  text <- gsub("\\b(n|N)(i|I)(g|G)(g|G)(e|E)(r|R)\\b", "\\1\\2ooer", text, perl = TRUE)
-  text <- gsub("\\b(f|F)(a|A)(g|G)(g|G)(o|O)(t|T)\\b", "\\1\\2ooot", text, perl = TRUE)
-  text <- gsub("\\b(n|N)(i|I)(g|G)(g|G)(\\w*)\\b", "\\1\\2oo\\5", text, perl = TRUE)
-  text <- gsub("\\b(f|F)(a|A)(g|G)(g|G)(\\w*)\\b", "\\1\\2oo\\5", text, perl = TRUE)
+  # text <- gsub("\\b(n|N)(i|I)(g|G)(g|G)(a|A)\\b", "\\1\\2**a", text, perl = TRUE)
+  # text <- gsub("\\b(n|N)(i|I)(g|G)(g|G)(a|A)\\b", "\\1\\2**as", text, perl = TRUE)
+  # text <- gsub("\\b(n|N)(i|I)(g|G)(g|G)(e|E)(r|R)\\b", "\\1\\2**er", text, perl = TRUE)
+  text <- gsub("\\b([nN])([iI])([gG])([gG])((?:a|er|as|ers)?)\\b", "\\1\\2**\\5", text, perl = TRUE)
+  text <- gsub("\\b(f|F)(a|A)(g|G)(g|G)(o|O)(t|T)\\b", "\\1\\2**ot", text, perl = TRUE)
+  # text <- gsub("\\b(n|N)(i|I)(g|G)(g|G)(\\w*)\\b", "\\1\\2**\\5", text, perl = TRUE)
+  # text <- gsub("\\b(f|F)(a|A)(g|G)(g|G)(\\w*)\\b", "\\1\\2**\\5", text, perl = TRUE)
   return(text)
 }
 
 remove_custom_punctuation <- content_transformer(function(text) {
-  gsub("[[:punct:]&&[^*]]", "", text)
+  # First, replace curly quotes with a standard ASCII version
+  text <- str_replace_all(text, "[‘’´`]+", "'")
+  text <- str_replace_all(text, '[“”]+', '"')
+  # remove punctuation except '*'
+  text <- gsub("[[:punct:]&&[^*]]", "", text)
+  text
 })
 
 data("stop_words")
@@ -345,7 +351,7 @@ Tyler_combined_clean <- censor_words(Tyler_combined_clean)
 Tyler_corp <- Corpus(VectorSource(Tyler_combined_clean))
 
 Tyler_corp <- tm_map(Tyler_corp, content_transformer(tolower)) 
-Tyler_corp <- tm_map(Tyler_corp, removePunctuation)  
+Tyler_corp <- tm_map(Tyler_corp, remove_custom_punctuation)  
 Tyler_corp <- tm_map(Tyler_corp, removeNumbers) 
 Tyler_corp <- tm_map(Tyler_corp, stripWhitespace)
 Tyler_corp <- tm_map(Tyler_corp, removeWords, stopwords("en"))  
@@ -374,7 +380,7 @@ Doom_combined_clean <- censor_words(Doom_combined_clean)
 Doom_corp <- Corpus(VectorSource(Doom_combined_clean))
 
 Doom_corp <- tm_map(Doom_corp, content_transformer(tolower)) 
-Doom_corp <- tm_map(Doom_corp, removePunctuation)  
+Doom_corp <- tm_map(Doom_corp, remove_custom_punctuation)  
 Doom_corp <- tm_map(Doom_corp, removeNumbers) 
 Doom_corp <- tm_map(Doom_corp, stripWhitespace)
 Doom_corp <- tm_map(Doom_corp, removeWords, stopwords("en"))  
@@ -402,6 +408,7 @@ library(ggplot2)
 library(wordcloud)
 library(wordcloud2)
 library(RColorBrewer)
+library(widyr)
 # 1. Clean data for specific terms and expressions
 # head(Doom_combined_clean, 1)
 # head(Tyler_combined_clean, 1)
@@ -940,6 +947,45 @@ ggplot(words_assigned, aes(x = factor(.topic), y = artist, fill = prop)) +
   labs(title = "Proportion of Words Assigned to Topic by Arttist",
        x = "Topic", y = "Artist", fill = "Prop") +
   theme_minimal()
+```
+
+
+# Random Forest stuff
+
+```{r}
+library(randomForest)
+library(caTools)
+# Get topic-feature df
+topic_features <- album_gamma %>%
+  pivot_wider(id_cols = c(document, artist),
+              names_from = topic,
+              values_from = gamma,
+              names_prefix = "topic_")
+head(topic_features)
+
+# Test/Train split -- HW5 Q2
+set.seed(123)
+split <- sample.split(topic_features$artist, SplitRatio = 0.7)
+train_data <- subset(topic_features, split == TRUE)
+test_data <- subset(topic_features, split == FALSE)
+
+nrow(train_data)
+nrow(test_data)
+table(train_data$artist)
+table(test_data$artist)
+
+# Model
+train_data$artist <- as.factor(train_data$artist)
+test_data$artist <- as.factor(test_data$artist)
+artist_rf <- randomForest(artist ~ topic_1 + topic_2 + topic_3 + topic_4, data = train_data)
+summary(artist_rf)
+
+# Predictions
+artist_preds <- predict(artist_rf, newdata = test_data)
+artist_conf_mat <- table(Actual = test_data$artist, Predicted = artist_preds)
+artist_conf_mat
+artist_rf_accuracy <- sum(diag(artist_conf_mat)) / sum(artist_conf_mat)
+cat("Random Forest model accuracy: ", artist_rf_accuracy * 100, "%\n")
 ```
 
 
