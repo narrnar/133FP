@@ -991,21 +991,27 @@ cat("Random Forest model accuracy: ", artist_rf_accuracy * 100, "%\n")
 
 # Automatic classification using predictive modeling based on text data. (if feasible)
 ```{r}
-
+# random forest above
 ```
 
 
 # Data Clustering (if feasible)
 
 ```{r}
-
+# TF-IDF for albums
+album_tfidf <- weightTfIdf(albums_dtm, normalize = FALSE)
+album_tfidf_mat <- as.matrix(album_tfidf)
+album_dist <- dist(album_tfidf_mat)
+# Hierarchical clustering
+album_hclust <- hclust(album_dist, method = "ward.D2")
+plot(album_hclust, hang = -1, cex = 0.8, main = "Hierarchical Clustering of Albums (TF-IDF)")
 ```
 
 
 # Visualization of correlations & topics
 
 ```{r}
-
+# Done above with corr plots
 ```
 
 # Comparing Authors, chapters, ... (if feasible)
@@ -1021,6 +1027,25 @@ cat("Random Forest model accuracy: ", artist_rf_accuracy * 100, "%\n")
 # Document similarities & Text alignment
 
 ```{r}
+library(proxy)
+library(reshape2)
+# Heatmap for similarities
+album_sim_mat <- as.matrix(simil(album_tfidf_mat, method = "cosine"))
+album_sim_df <- melt(album_sim_mat, varnames= c("album_i", "album_j"), value.name = "similarity")
+album_names <- rownames(album_tfidf_mat)
+album_sim_df$album_i <- factor(album_sim_df$album_i, levels = seq_along(album_names), labels = album_names)
+album_sim_df$album_j <- factor(album_sim_df$album_j, levels = seq_along(album_names), labels = album_names)
 
+ggplot(album_sim_df, aes(x = album_i, y = album_j, fill = similarity)) +
+  geom_tile(color = "white") +
+  scale_fill_gradient2(low = "red", mid = "white", high = "blue", midpoint = 0.5) +
+  labs(
+    title = "Album–Album Cosine Similarity (TF–IDF)",
+    x = "Album",
+    y = "Album",
+    fill = "Similarity"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
 
