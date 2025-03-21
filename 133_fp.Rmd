@@ -298,7 +298,7 @@ scrape_artist_discography("Tyler, the Creator", 2)
 ```
 
 
-# Ethan - Extract txt from discography
+# Ethan - Extract txt from discography -- more code to fix censoring and resulting plots
 
 ```{r}
 library(dplyr)
@@ -317,6 +317,8 @@ censor_words <- function(text) {
   text <- gsub("\\b(f|F)(a|A)(g|G)(g|G)(o|O)(t|T)\\b", "\\1\\2**ot", text, perl = TRUE)
   # text <- gsub("\\b(n|N)(i|I)(g|G)(g|G)(\\w*)\\b", "\\1\\2**\\5", text, perl = TRUE)
   # text <- gsub("\\b(f|F)(a|A)(g|G)(g|G)(\\w*)\\b", "\\1\\2**\\5", text, perl = TRUE)
+  
+  # text <- gsub("\\b([fF]([uU]([cC])([kK])\\b", "\\1\\2**\\3")
   return(text)
 }
 
@@ -328,6 +330,7 @@ remove_custom_punctuation <- content_transformer(function(text) {
   text <- gsub("[[:punct:]&&[^*]]", "", text)
   text
 })
+
 
 data("stop_words")
 
@@ -345,16 +348,19 @@ Tyler_combined_clean <- gsub("([A-Z])", " \\1", Tyler_combined_clean)
 
 # Random /n in the string, needed to be removed
 Tyler_combined_clean <- gsub("\n", " ", Tyler_combined_clean)
-Tyler_combined_clean <- censor_words(Tyler_combined_clean)
 
 
 Tyler_corp <- Corpus(VectorSource(Tyler_combined_clean))
 
 Tyler_corp <- tm_map(Tyler_corp, content_transformer(tolower)) 
-Tyler_corp <- tm_map(Tyler_corp, remove_custom_punctuation)  
+Tyler_corp <- tm_map(Tyler_corp, removePunctuation)  
 Tyler_corp <- tm_map(Tyler_corp, removeNumbers) 
 Tyler_corp <- tm_map(Tyler_corp, stripWhitespace)
-Tyler_corp <- tm_map(Tyler_corp, removeWords, stopwords("en"))  
+Tyler_corp <- tm_map(Tyler_corp, removeWords, stopwords("en"))
+
+Tyler_corp <- censor_words(Tyler_corp)
+Tyler_combined_clean <- censor_words(Tyler_combined_clean)
+
 
 # inspect(Tyler_corp)
 
@@ -374,17 +380,18 @@ Doom_combined <- paste(Doom_albums$text, collapse = " ")
 Doom_combined_clean <- gsub("\\[.*?\\]", "", Doom_combined)
 Doom_combined_clean <- gsub("([A-Z])", " \\1", Doom_combined_clean)
 Doom_combined_clean <- gsub("\n", " ", Doom_combined_clean)
-Doom_combined_clean <- censor_words(Doom_combined_clean)
 
 
 Doom_corp <- Corpus(VectorSource(Doom_combined_clean))
 
 Doom_corp <- tm_map(Doom_corp, content_transformer(tolower)) 
-Doom_corp <- tm_map(Doom_corp, remove_custom_punctuation)  
+Doom_corp <- tm_map(Doom_corp, removePunctuation)  
 Doom_corp <- tm_map(Doom_corp, removeNumbers) 
 Doom_corp <- tm_map(Doom_corp, stripWhitespace)
-Doom_corp <- tm_map(Doom_corp, removeWords, stopwords("en"))  
+Doom_corp <- tm_map(Doom_corp, removeWords, stopwords("en"))
 
+Doom_corp <- censor_words(Doom_corp)
+Doom_combined_clean <- censor_words(Doom_combined_clean)
 
 # inspect(Doom_corp)
 
@@ -419,6 +426,7 @@ library(stringdist)
 tyler_lines <- unlist(strsplit(Tyler_combined_clean, "\\.\\s+"))
 doom_lines <- unlist(strsplit(Doom_combined_clean, "\\.\\s+"))
 dist_mat <- stringdistmatrix(tyler_lines, doom_lines, method = "jw") # jw for Jaro-Wrinkler dists --- stackexhange ---
+# dist_mat
 
 
 # 3. Graphical displays of text data
@@ -446,8 +454,8 @@ wordcloud(words = names(doom_word_freq), freq = doom_word_freq, min.freq = 5, ma
 
 # 4. Natural language processing: stemming, parts-of-speech tagging
 # Stemming
-tyler_stemmed <- tm_map(Tyler_corp, stemDocument)
-doom_stemmed <- tm_map(Doom_corp, stemDocument)
+# tyler_stemmed <- tm_map(Tyler_corp, stemDocument)
+# doom_stemmed <- tm_map(Doom_corp, stemDocument)
 # Parts-of-speech tagging
 library(udpipe) # stackechange
 ud_model <- udpipe_download_model(language = "english")
@@ -897,17 +905,17 @@ albums_lda
 #.Word-Topic Probs
 topic_terms <- tidy(albums_lda, matrix = "beta")
 head(topic_terms)
-albums_top10 <- topic_terms %>%
+albums_top6 <- topic_terms %>%
   group_by(topic) %>%
   slice_max(beta, n = 6) %>%
   ungroup() %>%
   arrange(topic, -beta)
-albums_top10
-ggplot(albums_top10, aes(x = beta, reorder_within(term, beta, topic), fill = factor(topic))) +
+albums_top6
+ggplot(albums_top6, aes(x = beta, reorder_within(term, beta, topic), fill = factor(topic))) +
   geom_col(show.legend = FALSE) +
   facet_wrap(~ topic, scales = "free_y") +
   scale_y_reordered() +
-  labs(title = "Top 10 Words per Topic",
+  labs(title = "Top 6 Words per Topic",
        x = "Beta (Probability)",
        y = "Term")
 
@@ -1047,5 +1055,112 @@ ggplot(album_sim_df, aes(x = album_i, y = album_j, fill = similarity)) +
   ) +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+# After presentation fixes
+
+```{r}
+# Word freq comparison plot
+word_freq_df <- data.frame(word = c(names(topfeatures(dfm(Tyler_t), 10)), names(topfeatures(dfm(Doom_t), 10))),
+                           freq = c(topfeatures(dfm(Tyler_t), 10), topfeatures(dfm(Doom_t), 10)),
+                           artist = rep(c("Tyler", "Doom"), each = 10))
+
+word_freq_df$word <- gsub("niggas", "ni**as", word_freq_df$word)
+word_freq_df$word <- gsub("nigga", "ni**a", word_freq_df$word)
+word_freq_df$word <- gsub("fuck", "f*ck", word_freq_df$word)
+word_freq_df$word <- gsub("shit", "sh*t", word_freq_df$word)
+
+word_freq_df
+
+ggplot(word_freq_df, aes(x = reorder_within(word, freq, artist), y = freq, fill = artist)) +
+  geom_col() +
+  coord_flip() +
+  facet_wrap(~artist, scales = "free") +
+  scale_x_discrete(labels = function(x) gsub("___.*", "", x)) +
+  labs(title = "Top 10 Words Comparison",
+       x = "Word",
+       y = "Frequency")
+
+tyler_dtm <- DocumentTermMatrix(Tyler_corp)
+tyler_matrix <- as.matrix(tyler_dtm)
+tyler_word_freq <- sort(colSums(tyler_matrix), decreasing = TRUE)
+
+names(tyler_word_freq) <- gsub("niggas", "ni**as", names(tyler_word_freq))
+names(tyler_word_freq) <- gsub("nigga", "ni**a", names(tyler_word_freq))
+names(tyler_word_freq) <- gsub("fuck", "f*ck", names(tyler_word_freq))
+names(tyler_word_freq) <- gsub("shit", "sh*t", names(tyler_word_freq))
+names(tyler_word_freq) <- gsub("bitch", "b*tch", names(tyler_word_freq))
+
+set.seed(1)
+wordcloud(words = names(tyler_word_freq), freq = tyler_word_freq, min.freq = 5, max.words = 60, scale = c(4, 0.75), colors = brewer.pal(8, "Dark2"))
+
+doom_dtm <- DocumentTermMatrix(Doom_corp)
+doom_matrix <- as.matrix(doom_dtm)
+doom_word_freq <- sort(colSums(doom_matrix), decreasing = TRUE)
+
+names(doom_word_freq) <- gsub("niggas", "ni**as", names(doom_word_freq))
+names(doom_word_freq) <- gsub("nigga", "ni**a", names(doom_word_freq))
+names(doom_word_freq) <- gsub("fuck", "f*ck", names(doom_word_freq))
+names(doom_word_freq) <- gsub("shit", "sh*t", names(doom_word_freq))
+names(doom_word_freq) <- gsub("bitch", "b*tch", names(doom_word_freq))
+
+set.seed(1)
+wordcloud(words = names(doom_word_freq), freq = doom_word_freq, min.freq = 5, max.words = 60, scale = c(4, 0.75), colors = brewer.pal(8, "Dark2"))
+
+tyler_bigrams <- Tyler_albums %>%
+  unnest_tokens(bigram, text, token = "ngrams", n = 2) %>%
+  count(bigram, sort = TRUE)
+doom_bigrams <- Doom_albums %>%
+  unnest_tokens(bigram, text, token = "ngrams", n = 2) %>%
+  count(bigram, sort = TRUE)
+
+
+# Bigrams for each artist
+tyler_df <- tibble(text = Tyler_combined_clean)
+tyler_bigrams <- tyler_df %>%
+  unnest_tokens(bigram, text, token = "ngrams", n = 2) %>%
+  separate(bigram, c("word1", "word2"), sep = " ") %>%
+  filter(!word1 %in% stop_words$word,
+         !word2 %in% stop_words$word,
+         !is.na(word1)) %>%
+  unite(bigram, word1, word2, sep = " ") %>%
+  count(bigram, sort = TRUE) %>%
+  top_n(15, n)
+doom_df <- tibble(text = Doom_combined_clean)
+doom_bigrams <- doom_df %>%
+  unnest_tokens(bigram, text, token = "ngrams", n = 2) %>%
+  separate(bigram, c("word1", "word2"), sep = " ") %>%
+  filter(!word1 %in% stop_words$word,
+         !word2 %in% stop_words$word,
+         !is.na(word1)) %>%
+  unite(bigram, word1, word2, sep = " ") %>%
+  count(bigram, sort = TRUE) %>%
+  top_n(15, n)
+
+tyler_bigrams$bigram <- gsub("niggas", "ni**as", tyler_bigrams$bigram)
+tyler_bigrams$bigram <- gsub("nigga", "ni**a", tyler_bigrams$bigram)
+tyler_bigrams$bigram <- gsub("fuck", "f*ck", tyler_bigrams$bigram)
+tyler_bigrams$bigram <- gsub("shit", "sh*t", tyler_bigrams$bigram)
+tyler_bigrams$bigram <- gsub("bitch", "b*tch", tyler_bigrams$bigram)
+
+doom_bigrams$bigram <- gsub("niggas", "ni**as", doom_bigrams$bigram)
+doom_bigrams$bigram <- gsub("nigga", "ni**a", doom_bigrams$bigram)
+doom_bigrams$bigram <- gsub("fuck", "f*ck", doom_bigrams$bigram)
+doom_bigrams$bigram <- gsub("shit", "sh*t", doom_bigrams$bigram)
+doom_bigrams$bigram <- gsub("bitch", "b*tch", doom_bigrams$bigram)
+
+# Bigram Visualizations
+ggplot(tyler_bigrams, aes(x = reorder(bigram, n), y = n)) +
+  geom_col(fill = "goldenrod") +
+  coord_flip() +
+  labs(title = "Top Bigrams in Tyler, The Creator's Lyrics",
+       x = "Bigram", y = "Frequency") +
+  theme_minimal()
+ggplot(doom_bigrams, aes(x = reorder(bigram, n), y = n)) +
+  geom_col(fill = "lightblue") +
+  coord_flip() +
+  labs(title = "Top Bigrams in MF DOOM's Lyrics",
+       x = "Bigram", y = "Frequency") +
+  theme_minimal()
 ```
 
